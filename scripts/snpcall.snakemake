@@ -6,8 +6,8 @@ configfile: "config.yaml"
 projectdir = config['project_directory']
 reference = config["reference"]
 
-# reads_folder = "/tsl/data/reads/jjones/whole_genome_shotgun_of_solanum_americanum"
-reads_folder = "/hpc-home/shrestha/workarea/fairheas/snpcalling/reads/"
+reads_folder = config['reads_folder']
+#reads_folder = "/hpc-home/shrestha/workarea/fairheas/snpcalling/reads/"
 
 # samples = glob_wildcards(reads_folder + "/*_d*/{sample}/raw").sample
 samples = [x.split("/")[-2] for x in  glob(reads_folder + "/*_d*/*_d*/raw")]

@@ -1,2 +1,3 @@
 project_directory: /hpc-home/shrestha/workarea/fairheas/snpcalling
-reference: /tsl/data/dropbox/SP1102_polished_30x.fasta 
+reads_folder: "/tsl/data/reads/jjones/whole_genome_shotgun_of_solanum_americanum"
+reference: /tsl/data/dropbox/SP1102_polished_30x.fasta
