@@ -8,10 +8,12 @@ If a sample containing multiple sample files, the R1 and R2 read files, they  wi
 
 ## Requirements
 
-1) trimmomatic
-2) bowtie2
-3) samtools
-4) bcftools
+These tools need to be sourced before running the pipeline
+1) python-3.6.1 with snakemake v5.9
+2) trimmomatic v0.36
+3) bowtie2 v2.3.5
+4) samtools v1.9
+5) bcftools v.19
 
 ## Steps in the pipeline
 
@@ -19,5 +21,15 @@ If a sample containing multiple sample files, the R1 and R2 read files, they  wi
 2) Reads alignment using bowtie2 v2.3.5
 3) SAM to sorted BAM convertion using samtools v1.9
 4) vcf file generation from BAM file using bcftools 
+
+## Usage:
+
+To run the pipeline in HPC with job in parallel in interactive mode
+
+snakemake -s scripts/snpcall.snakemake -p --cluster 'sbatch --cpus 2 --mem 20G' --jobs 10
+
+The above command can also be submitted to HPC like this
+
+sbatch -o snakemake_job.log --mem 100 -J snpcall --wrap " snakemake -s scripts/snpcall.snakemake -p --cluster 'sbatch --cpus 2 --mem 20G' --jobs 10 "
 
 
