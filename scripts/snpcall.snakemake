@@ -1,0 +1,120 @@
+import os
+from glob import glob
+
+
+configfile: "config.yaml"
+projectdir = config['project_directory']
+reference = config["reference"]
+
+# reads_folder = "/tsl/data/reads/jjones/whole_genome_shotgun_of_solanum_americanum"
+reads_folder = "/hpc-home/shrestha/workarea/fairheas/snpcalling/reads/"
+
+# samples = glob_wildcards(reads_folder + "/*_d*/{sample}/raw").sample
+samples = [x.split("/")[-2] for x in  glob(reads_folder + "/*_d*/*_d*/raw")]
+print(samples)
+
+samplefiles=dict()
+for sample in samples:
+    samplefiles[sample]={'R1':glob(reads_folder + "/" + sample + "/" + sample + "/raw/" + "*_1.fq.gz"),
+                         'R2':glob(reads_folder + "/" + sample + "/" + sample + "/raw/" + "*_2.fq.gz")}
+
+# print(samplefiles)
+
+# rule testrule:
+#     input:
+#         expand([projectdir+"/results/trimmomatic/{sample}_1.fastq.gz"], sample=samples)
+
+
+rule trimmomatic:
+    input:
+        #R1=glob(reads_folder + "/*/*/raw/*_1.fq.gz"),
+        #R2=glob(reads_folder + "/*/*/raw/*_2.fq.gz")
+        R1= lambda wildcards: samplefiles[wildcards.sample]['R1'],
+        R2= lambda wildcards: samplefiles[wildcards.sample]['R2']
+    output:
+        # projectdir+"/results/trimmomatic/{sample}_1.fastq.gz",
+        # projectdir+"/results/trimmomatic/{sample}_2.fastq.gz"
+        # projectdir + "/results/trimmomatic/done"
+        # R1 = lambda wildcards: glob(projectdir + "/results/trimmomatic/" + wildcards.sample + "*_1.fastq.gz"),
+        # R2 = lambda wildcards: glob(projectdir + "/results/trimmomatic/" + wildcards.sample + "*_2.fastq.gz")
+        # R1 = lambda wildcards: expand([projectdir + "/results/trimmomatic/{sample}_1.fastq.gz"], sample=[ os.path.splitext(os.path.splitext(os.path.basename(x))[0])[0].replace("_1")  for x in samplefiles[wildcards.sample][R1] ] ),
+        # R2 = lambda wildcards: expand([projectdir + "/results/trimmomatic/{sample}_2.fastq.gz"], sample=[ os.path.splitext(os.path.splitext(os.path.basename(x))[0])[0].replace("_2")  for x in samplefiles[wildcards.sample][R2] ] )
+        projectdir + "/results/trimmomatic/{sample}.done"
+
+
+    benchmark: "benchmark/trimmomatic/{sample}.txt"
+    message: "running trimmomatic quality control on sample {wildcards.sample}"
+    threads: 4
+    log: projectdir+"/logs/trimmomatic_{sample}.log"
+    run:
+        for x in range(len(input.R1)):
+            R1=input.R1[x]
+            R2=input.R2[x]
+            basenameR1=os.path.basename(input.R1[x])
+            basenameR1_no_ext = os.path.splitext(basenameR1.replace(".gz",""))[0]
+            basenameR2=os.path.basename(input.R2[x])
+            basenameR2_no_ext = os.path.splitext(basenameR2.replace(".gz",""))[0]
+            print(basenameR1, basenameR2, basenameR1_no_ext, basenameR2_no_ext)
+            shell("trimmomatic PE -threads 4  -phred33 -trimlog {log} {R1} {R2} " + projectdir + "/results/trimmomatic/" + basenameR1_no_ext + ".fq.gz " + projectdir + "/results/trimmomatic/" + basenameR1_no_ext + "_unpaired.fq.gz " + projectdir + "/results/trimmomatic/" + basenameR2_no_ext + ".fq.gz " + projectdir + "/results/trimmomatic/" + basenameR2_no_ext + "_unpaired.fq.gz "  + " SLIDINGWINDOW:4:20 MINLEN:30" )
+        shell("touch {output}")
+
+rule bowtie2_index:
+    input:
+        reference
+    output:
+        reference + ".1.bt2",
+        reference + ".2.bt2",
+        reference + ".3.bt2",
+        reference + ".4.bt2",
+        reference + ".rev.1.bt2",
+        reference + ".rev.2.bt2"
+    benchmark: "benchmark/bowtie2_index.txt"
+    log: "logs/bowtie2_index.log"
+    shell: "bowtie2-build -f " + reference + " " + reference
+
+rule bowtie2_alignment:
+    input:
+        trim= projectdir + "/results/trimmomatic/{sample}.done",
+        R1 = lambda wildcards: glob(projectdir + "/results/trimmomatic/" + wildcards.sample + "*_1.fastq.gz"),
+        R2 = lambda wildcards: glob(projectdir + "/results/trimmomatic/" + wildcards.sample + "*_2.fastq.gz"),
+        bamindex=[reference + ".1.bt2",
+        reference + ".2.bt2",
+        reference + ".3.bt2",
+        reference + ".4.bt2",
+        reference + ".rev.1.bt2",
+        reference + ".rev.2.bt2"]
+
+    output:
+        projectdir + "/results/bowtie2/{sample}_sorted.bam"
+    benchmark: "benchmark/bowtie2_alignment_{sample}.txt"
+    log: "logs/bowtie2_alignment_{sample}.txt"
+    # run:
+    #     R1files=",".join(input.R1)
+    #     R2files=",".join(input.R2)
+    shell: "bowtie2 --threads 4 --no-unal --rg-id {wildcards.sample} --rg {wildcards.sample} -1 {input.R1} -2 {input.R2} | samtools view -b | samtools sort -o {output} && samtools index {output}"
+
+
+# rule merge_bams_to_vcf:
+#     '''
+#     merge aligned bams to single vcf
+#     '''
+#     input: expand(["bam/{sample}_best_lte0.25-clipped.bam"], sample=samplenames)
+#     output: 'vcf/'+vcf_basename + '_all.vcf'
+#     message: "Merging bam files to single vcf"
+#     log: 'logs/merge_bams_to_vcf.log'
+#     shell:  "samtools mpileup -Buf " + reference + " {input} --output-tags DP | bcftools call -m - | bcftools view - -o {output}"  # source samtools-1.3.1 && source bcftools-1.3.1
+#
+rule bam_to_vcf:
+    input:
+        projectdir + "/results/bowtie2/{sample}_sorted.bam"
+    output:
+        projectdir + "/results/vcf/{sample}.vcf"
+    message: "Calling snps from bam file on sample {wildcards.sample}"
+    benchmark: "benchmark/bam_to_vcf_{sample}.log"
+    log: "logs/bam_to_vcf_{sample}.log"
+    shell: "samtools mpileup -Buf " + reference + " {input} --output-tags DP | bcftools call -m - | bcftools view - -o {output}"
+
+
+rule generate_vcf:
+    input:
+        expand([projectdir + "/results/vcf/{sample}.vcf"], sample=samples)
