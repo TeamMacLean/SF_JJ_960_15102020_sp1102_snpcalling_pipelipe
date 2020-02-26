@@ -44,6 +44,7 @@ rule trimmomatic:
     message: "running trimmomatic quality control on sample {wildcards.sample}"
     threads: 4
     log: projectdir+"/logs/trimmomatic_{sample}.log"
+    params: 
     run:
         for x in range(len(input.R1)):
             R1=input.R1[x]
@@ -53,8 +54,10 @@ rule trimmomatic:
             basenameR2=os.path.basename(input.R2[x])
             basenameR2_no_ext = os.path.splitext(basenameR2.replace(".gz",""))[0]
             print(basenameR1, basenameR2, basenameR1_no_ext, basenameR2_no_ext)
-            shell("trimmomatic PE -threads 4  -phred33 -trimlog {log} {R1} {R2} " + projectdir + "/results/trimmomatic/{wildcards.sample}/" + basenameR1_no_ext + ".fq.gz " + projectdir + "/results/trimmomatic/{wildcards.sample}/" + basenameR1_no_ext + "_unpaired.fq.gz " + projectdir + "/results/trimmomatic/{wildcards.sample}/" + basenameR2_no_ext + ".fq.gz " + projectdir + "/results/trimmomatic/{wildcards.sample}/" + basenameR2_no_ext + "_unpaired.fq.gz "  + " SLIDINGWINDOW:4:20 MINLEN:30" )
+            # shell("trimmomatic PE -threads 4  -phred33 -trimlog {log} {R1} {R2} " + projectdir + "/results/trimmomatic/{wildcards.sample}/" + basenameR1_no_ext + ".fq.gz " + projectdir + "/results/trimmomatic/{wildcards.sample}/" + basenameR1_no_ext + "_unpaired.fq.gz " + projectdir + "/results/trimmomatic/{wildcards.sample}/" + basenameR2_no_ext + ".fq.gz " + projectdir + "/results/trimmomatic/{wildcards.sample}/" + basenameR2_no_ext + "_unpaired.fq.gz "  + " SLIDINGWINDOW:4:20 MINLEN:30" )
+            shell("bash scripts/run_trimmomatic_pairedend.sh {projectdir} {wildcards.sample} {R1} {R2} {log} {basenameR1} {basenameR2}")
         shell("touch {output}")
+
 
 rule bowtie2_index:
     input:
@@ -68,7 +71,7 @@ rule bowtie2_index:
         reference + ".rev.2.bt2"
     benchmark: "benchmark/bowtie2_index.txt"
     log: "logs/bowtie2_index.log"
-    shell: "bowtie2-build -f " + reference + " " + reference
+    shell: "bash scripts/build_index.sh {input} {input}"
 
 rule bowtie2_alignment:
     input:
@@ -91,7 +94,8 @@ rule bowtie2_alignment:
         R2files=",".join(input.R2)
         print(R1files)
         print(R2files)
-        shell("bowtie2 --threads 4 --no-unal --rg-id {wildcards.sample} --rg {wildcards.sample} -x {reference} -1 {R1files} -2 {R2files} | samtools view -b | samtools sort -o {output} && samtools index {output}" )
+        # shell("bowtie2 --threads 4 --no-unal --rg-id {wildcards.sample} --rg {wildcards.sample} -x {reference} -1 {R1files} -2 {R2files} | samtools view -b | samtools sort -o {output} && samtools index {output}" )
+        shell("bash scripts/run_bowtie.sh {sample} {reference} {R1files} {R2files} {output}")
 
 
 # rule merge_bams_to_vcf:
@@ -112,4 +116,5 @@ rule bam_to_vcf:
     message: "Calling snps from bam file on sample {wildcards.sample}"
     benchmark: "benchmark/bam_to_vcf_{sample}.log"
     log: "logs/bam_to_vcf_{sample}.log"
-    shell: "samtools mpileup -Buf " + reference + " {input} --output-tags DP | bcftools call --keep-alts --variants-only --multiallelic-caller  | bcftools view - -o {output}"
+    # shell: "samtools mpileup -Buf " + reference + " {input} --output-tags DP | bcftools call --keep-alts --variants-only --multiallelic-caller  | bcftools view - -o {output}"
+    shell: "bash scripts/bam_to_vcf.sh {reference} {input} {output}"
