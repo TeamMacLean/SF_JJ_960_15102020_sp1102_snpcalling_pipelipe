@@ -13,7 +13,8 @@ These tools need to be sourced before running the pipeline
 2) trimmomatic v0.36
 3) bowtie2 v2.3.5
 4) samtools v1.9
-5) bcftools v.19
+5) bcftools v1.9
+
 
 ## Steps in the pipeline
 
